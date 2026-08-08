@@ -87,7 +87,7 @@ git push origin feature/add-transaction-filters
 ```
 
 ### 9. Open a Pull Request
-- Go to the main project repository on GitHub (Code-A2Z/perfinma) and you will see a prompt to open a pull request from your recently pushed branch.
+- Go to the main project repository on GitHub (Ravindarnaik90/perfinma) and you will see a prompt to open a pull request from your recently pushed branch.
 - Give your pull request a clear title. Read more [here](https://namingconvention.org/git/pull-request-naming) for PR naming.
 - In the description, explain the changes you made and link to the issue you're solving by writing ```Closes #123``` (replace ```123``` with the issue number).
 - Submit the pull request for review.
