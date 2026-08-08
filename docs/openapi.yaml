@@ -1,0 +1,266 @@
+openapi: 3.0.3
+info:
+  title: Perfinma API
+  description: API documentation for the Perfinma personal finance application, built with Node.js, Express, MongoDB, and Google Gemini for OCR.
+  version: 1.0.0
+servers:
+  - url: https://Perfinma.onrender.com/api
+    description: Production Server
+  - url: http://localhost:5000/api
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        _id:
+          type: string
+        user:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        cost:
+          type: number
+        addedOn:
+          type: string
+          format: date-time
+        isIncome:
+          type: boolean
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+tags:
+  - name: Auth
+    description: User Authentication
+  - name: Transactions
+    description: Operations related to income and expenses
+  - name: Receipts
+    description: Receipt uploading and OCR processing
+
+paths:
+  # --- Auth Routes ---
+  /auth/signup:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: "user@example.com" }
+                password: { type: string, example: "Password123!" }
+      responses:
+        "201":
+          description: User registered successfully
+        "400":
+          description: Validation error or user already exists
+
+  /auth/login:
+    post:
+      summary: Login a user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Successful login, returns user object and JWT
+        "401":
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      summary: Get current user profile
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Returns current user details
+        "401":
+          description: Unauthorized
+
+  # --- Transaction Routes ---
+  /transactions:
+    get:
+      summary: Get all user transactions (paginated)
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        "200":
+          description: A paginated list of transactions
+    post:
+      summary: Create a new transaction
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        "201":
+          description: Transaction created successfully
+
+  /transactions/{id}:
+    put:
+      summary: Update a transaction
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        "200":
+          description: Transaction updated successfully
+    delete:
+      summary: Delete a transaction
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Transaction deleted successfully
+
+  /transactions/summary:
+    get:
+      summary: Get dashboard summary
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Returns total income, expenses, balance, and recent transactions
+
+  /transactions/charts:
+    get:
+      summary: Get data for dashboard charts
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Returns data structured for category and activity charts
+
+  /transactions/categories/expense:
+    get:
+      summary: Get all unique expense categories
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Returns a list of all default and user-defined expense categories
+
+  /transactions/categories/income:
+    get:
+      summary: Get all unique income categories
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Returns a list of all default and user-defined income categories
+
+  /transactions/category:
+    delete:
+      summary: Delete a custom category
+      tags: [Transactions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                categoryToDelete: { type: string }
+      responses:
+        "200":
+          description: Category deleted and transactions reassigned
+
+  # --- Receipt Routes ---
+  /receipts/upload:
+    post:
+      summary: Upload receipt, process OCR, and create transaction
+      description: This single endpoint handles file upload (via multipart/form-data), calls the Google Gemini API for OCR, and automatically creates a new expense transaction.
+      tags: [Receipts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                receipt:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Receipt processed and transaction created successfully
+        "500":
+          description: Error processing with AI
+
+  # --- User Routes ---
+  /users/account:
+    delete:
+      summary: Delete the authenticated user account
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Account deleted successfully
+        "401":
+          description: Unauthorized
+        "500":
+          description: Server error 
