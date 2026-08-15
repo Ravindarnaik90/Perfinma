@@ -26,7 +26,7 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://perfima.netlify.app',
+  'https://perfinma.netlify.app',
 ];
 
 app.use(
