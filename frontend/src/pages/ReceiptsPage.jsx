@@ -82,8 +82,15 @@ const ReceiptsPage = () => {
 			// Open the modal to allow user to edit the extracted data
 			setOpenEditReceiptResult(true);
 		} catch (err) {
-			setError("Upload failed. Please try again.");
-			console.error(err);
+console.error("Receipt upload error:", err);
+    console.error("Response:", err.response?.data);
+    console.error("Status:", err.response?.status);
+
+    setError(
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Upload failed. Please try again."
+    );
 		} finally {
 			setUploading(false);
 		}
