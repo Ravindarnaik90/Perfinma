@@ -18,17 +18,31 @@ const ReceiptsPage = () => {
 
 	// Fetch categories when component mounts
 	useEffect(() => {
-		const fetchCategories = async () => {
-			try {
-				const response = await api.get("/transactions/categories");
-				setCategories(response.data);
-			} catch (error) {
-				console.error("Failed to fetch categories:", error);
-			}
-		};
+	const fetchCategories = async () => {
+		try {
+			const [expenseResponse, incomeResponse] = await Promise.all([
+				api.get("/transactions/categories/expense"),
+				api.get("/transactions/categories/income"),
+			]);
 
-		fetchCategories();
-	}, []);
+			const expenseCategories = expenseResponse.data.map((category) => ({
+				name: category,
+				isIncome: false,
+			}));
+
+			const incomeCategories = incomeResponse.data.map((category) => ({
+				name: category,
+				isIncome: true,
+			}));
+
+			setCategories([...expenseCategories, ...incomeCategories]);
+		} catch (error) {
+			console.error("Failed to fetch categories:", error);
+		}
+	};
+
+	fetchCategories();
+}, []);
 
 	// Handle mobile responsive resize
 	useEffect(() => {
