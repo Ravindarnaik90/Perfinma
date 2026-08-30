@@ -22,85 +22,173 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: function (req, file, cb) {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only JPG, PNG, and PDF files are allowed'), false);
-    }
-  }
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+// ✅ DEBUG VERSION - This will log everything
 router.post('/upload', upload.single('receipt'), async (req, res) => {
+  console.log('========================================');
+  console.log('📥 RECEIPT UPLOAD REQUEST RECEIVED');
+  console.log('========================================');
+  
   try {
+    // Step 1: Check if file exists
     if (!req.file) {
+      console.log('❌ No file uploaded');
       return res.status(400).json({ 
         success: false,
         error: 'No file uploaded' 
       });
     }
 
-    console.log(`📁 Processing receipt: ${req.file.filename}`);
+    console.log(`✅ File received:`);
+    console.log(`   - Name: ${req.file.originalname}`);
+    console.log(`   - Size: ${req.file.size} bytes`);
+    console.log(`   - Type: ${req.file.mimetype}`);
+    console.log(`   - Path: ${req.file.path}`);
 
+    // Step 2: Check API Key
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log(`🔑 API Key: ${apiKey ? '✅ Present (' + apiKey.substring(0, 10) + '...)' : '❌ MISSING!'}`);
+    
     if (!apiKey) {
-      console.error('❌ GEMINI_API_KEY is missing');
+      console.log('❌ GEMINI_API_KEY is missing');
       return res.status(500).json({ 
         success: false,
         error: 'Server configuration error: API key missing' 
       });
     }
 
-    // Initialize Gemini with FREE model
-    const genAI = new GoogleGenerativeAI(apiKey);
+    // Step 3: Test Gemini API connection
+    console.log('🔄 Testing Gemini API connection...');
     
-    // ✅ Use ONLY free models
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",  // Best free model
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 1024,
+    let genAI;
+    try {
+      genAI = new GoogleGenerativeAI(apiKey);
+      console.log('✅ Gemini client created');
+    } catch (error) {
+      console.log('❌ Failed to create Gemini client:', error.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to initialize AI service',
+        details: error.message
+      });
+    }
+
+    // Step 4: Read file
+    console.log('📖 Reading file...');
+    let fileBuffer;
+    let base64Data;
+    try {
+      fileBuffer = fs.readFileSync(req.file.path);
+      base64Data = fileBuffer.toString('base64');
+      console.log(`✅ File read: ${base64Data.length} characters`);
+    } catch (error) {
+      console.log('❌ Failed to read file:', error.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to read file',
+        details: error.message
+      });
+    }
+
+    // Step 5: Try each model
+    const modelsToTry = [
+      'gemini-1.5-flash',
+      'gemini-1.5-pro',
+      'gemini-1.0-pro'
+    ];
+
+    let result = null;
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`🔄 Trying model: ${modelName}`);
+        const model = genAI.getGenerativeModel({ 
+          model: modelName
+        });
+
+        console.log(`📤 Sending to Gemini (${modelName})...`);
+        
+        const startTime = Date.now();
+        result = await model.generateContent([
+          "Extract receipt details in JSON format: merchant_name (string), date (string in YYYY-MM-DD), total_amount (number), tax (number), items (array with name and price). Return ONLY valid JSON.",
+          { inlineData: { mimeType: req.file.mimetype, data: base64Data } }
+        ]);
+        const endTime = Date.now();
+        
+        console.log(`✅ Gemini responded in ${endTime - startTime}ms`);
+        console.log(`📝 Response preview: ${result.response.text().substring(0, 100)}...`);
+        
+        break; // Success, exit loop
+      } catch (error) {
+        console.log(`❌ Model ${modelName} failed:`, error.message);
+        lastError = error;
+        continue;
       }
-    });
+    }
 
-    // Read file
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const base64Data = fileBuffer.toString('base64');
-    const mimeType = req.file.mimetype;
+    // Step 6: Check if we got a response
+    if (!result || !result.response) {
+      console.log('❌ All models failed');
+      console.log('Last error:', lastError?.message);
+      
+      // Clean up file
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+      
+      return res.status(500).json({
+        success: false,
+        error: 'AI processing failed',
+        details: lastError?.message || 'Unknown error',
+        suggestion: 'Check your Gemini API key and try again'
+      });
+    }
 
-    console.log('🤖 Sending to Gemini (free tier)...');
-
-    // ✅ Correct format for free tier
-    const result = await model.generateContent([
-      "Extract receipt details in JSON format: merchant_name, date (YYYY-MM-DD), total_amount, tax, items (array of name and price). Return ONLY JSON.",
-      { inlineData: { mimeType: mimeType, data: base64Data } }
-    ]);
-
+    // Step 7: Parse response
     const responseText = result.response.text();
-    console.log('📝 Gemini Response:', responseText);
+    console.log('📝 Full response:', responseText);
 
-    // Parse response
     let extractedData;
     try {
       extractedData = JSON.parse(responseText);
+      console.log('✅ JSON parsed successfully');
     } catch (parseError) {
+      console.log('⚠️ Failed to parse JSON, trying to extract...');
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        extractedData = JSON.parse(jsonMatch[0]);
+        try {
+          extractedData = JSON.parse(jsonMatch[0]);
+          console.log('✅ JSON extracted from text');
+        } catch (e) {
+          console.log('❌ Failed to extract JSON');
+          extractedData = {
+            merchant_name: "Unknown",
+            date: new Date().toISOString().split('T')[0],
+            total_amount: 0,
+            tax: 0,
+            items: [],
+            raw_text: responseText
+          };
+        }
       } else {
         extractedData = {
           merchant_name: "Unknown",
           date: new Date().toISOString().split('T')[0],
           total_amount: 0,
           tax: 0,
-          items: [],
-          raw_text: responseText
+          items: []
         };
       }
     }
 
+    // Step 8: Clean up
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+
+    // Step 9: Send success
+    console.log('✅ Sending success response');
+    console.log('========================================\n');
+    
     res.status(200).json({
       success: true,
       data: extractedData,
@@ -108,11 +196,19 @@ router.post('/upload', upload.single('receipt'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.log('========================================');
+    console.log('❌ UNEXPECTED ERROR:');
+    console.log(error);
+    console.log('========================================\n');
+    
+    // Clean up file if it exists
+    try { if (req.file) fs.unlinkSync(req.file.path); } catch (e) {}
+    
     res.status(500).json({ 
       success: false,
-      error: 'Failed to process receipt',
-      details: error.message
+      error: 'Internal server error',
+      details: error.message,
+      stack: error.stack
     });
   }
 });
