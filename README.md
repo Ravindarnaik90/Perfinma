@@ -90,7 +90,7 @@ Perfinma is a **full-stack personal finance management app** built with **React 
 Before cloning, make sure to fork the repository to your GitHub account.
 
 1. Go to the GitHub repo page: https://github.com/Ravindarnaik90/perfinma
-2. Click Fork in the top-right corner.
+2. Click Fork in the top-right corner...
 
 ### Clone your fork
 
@@ -210,10 +210,6 @@ Please refer to our [Contributing Guide](CONTRIBUTING.md) for detailed instructi
 ## Contributors
 
 We'd like to extend our heartfelt thanks to everyone who has contributed to **Perfinma** — whether through code, design, documentation, bug reports, or ideas. Your efforts make this project better for everyone. 💖
-
-<a href="https://github.com/Code-A2Z/perfinma/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Code-A2Z/perfinma" />
-</a>
 
 
 
